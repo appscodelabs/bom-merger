@@ -17,72 +17,170 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"text/template"
+	"sort"
 
-	"github.com/Masterminds/sprig"
-	"github.com/google/uuid"
-	"github.com/hashicorp/go-getter"
 	flag "github.com/spf13/pflag"
-	"sigs.k8s.io/yaml"
+	"gomodules.xyz/mod"
 )
 
 var (
-	sessionID  = uuid.New().String()
-	tplFile    string
-	tplPattern string
-	dataFile   string
+	dirIn  string
+	dirOut string
 )
 
 func init() {
-	flag.StringVar(&tplFile, "template", "", "Path to Go template file (local file or url is accepted)")
-	flag.StringVar(&tplPattern, "pattern", "", "Pattern to select Go template files")
-	flag.StringVar(&dataFile, "data", "", "Path to data file in JSON or YAML format (local file or url is accepted)")
+	flag.StringVar(&dirIn, "in", "", "Path to directory where BOM json files are stored")
+	flag.StringVar(&dirOut, "out", "", "Path to directory where output files are stored")
 }
-func main() {
-	flag.Parse()
 
-	opts := func(c *getter.Client) error {
-		pwd, err := os.Getwd()
+type projectAndLicenses struct {
+	Project  string    `json:"project"`
+	Licenses []license `json:"licenses,omitempty"`
+	Error    string    `json:"error,omitempty"`
+	VCS      string    `json:"vcs,omitempty"`
+}
+
+type license struct {
+	Type       string  `json:"type,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"`
+}
+
+var regBOM = map[string]projectAndLicenses{}
+var regErrors = map[string]projectAndLicenses{}
+
+func cleanupLicense(reg map[string]projectAndLicenses) error {
+	for project, info := range reg {
+		lics := make([]license, 0, len(info.Licenses))
+		for _, lic := range info.Licenses {
+			if lic.Confidence > 0.5 {
+				lics = append(lics, lic)
+			}
+		}
+		info.Licenses = lics
+		reg[project] = info
+	}
+	return nil
+}
+
+func discoverVCS(reg map[string]projectAndLicenses) error {
+	for project, info := range reg {
+		vcs, err := mod.DetectVCSRoot(info.Project)
 		if err != nil {
 			return err
 		}
-		c.Pwd = pwd
-		return nil
+		info.VCS = vcs
+		reg[project] = info
 	}
+	return nil
+}
 
-	localDataFile := filepath.Join(os.TempDir(), sessionID, "template-data.txt")
-	err := getter.GetFile(localDataFile, dataFile, opts)
+func writeBOM(filename string, reg map[string]projectAndLicenses) error {
+	bom := make([]projectAndLicenses, 0, len(reg))
+	for _, key := range Keys(reg) {
+		bom = append(bom, reg[key])
+	}
+	data, err := MarshalJson(bom)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, data, 0644)
+}
+
+func Keys(m map[string]projectAndLicenses) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func MarshalJson(v interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	err := encoder.Encode(v)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func loadBOM(filename string) error {
+	f, err := os.Open(filename)
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 
-	d, err := ioutil.ReadFile(localDataFile)
-	if err != nil {
-		panic(err)
-	}
+	decoder := json.NewDecoder(f)
 
-	var data map[string]interface{}
-	err = yaml.Unmarshal(d, &data)
-	if err != nil {
-		panic(err)
-	}
-
-	var tpl *template.Template
-	if tplPattern != "" {
-		tpl = template.Must(template.New(filepath.Base(tplFile)).Funcs(sprig.TxtFuncMap()).ParseGlob(tplPattern))
-	} else {
-		localTplFile := filepath.Join(os.TempDir(), sessionID, "template.txt")
-		err := getter.GetFile(localTplFile, tplFile, opts)
-		if err != nil {
-			panic(err)
+	gooddoc := true
+	for {
+		var info []projectAndLicenses
+		err = decoder.Decode(&info)
+		if err == io.EOF {
+			break
 		}
-
-		tpl = template.Must(template.New(filepath.Base(localTplFile)).Funcs(sprig.TxtFuncMap()).ParseFiles(localTplFile))
+		if err != nil {
+			return err
+		}
+		if gooddoc {
+			for _, project := range info {
+				regBOM[project.Project] = project
+			}
+			gooddoc = false
+		} else {
+			for _, project := range info {
+				regErrors[project.Project] = project
+			}
+		}
 	}
-	err = tpl.Execute(os.Stdout, &data)
+	return nil
+}
+
+func main() {
+	flag.Parse()
+
+	files, err := ioutil.ReadDir(dirIn)
+	if err != nil {
+		panic(err)
+	}
+	for _, f := range files {
+		if !f.IsDir() {
+			err = loadBOM(filepath.Join(dirIn, f.Name()))
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	err = cleanupLicense(regBOM)
+	if err != nil {
+		panic(err)
+	}
+
+	err = discoverVCS(regBOM)
+	if err != nil {
+		panic(err)
+	}
+	err = discoverVCS(regErrors)
+	if err != nil {
+		panic(err)
+	}
+
+	err = writeBOM(filepath.Join(dirOut, "bom.json"), regBOM)
+	if err != nil {
+		panic(err)
+	}
+	err = writeBOM(filepath.Join(dirOut, "bom_error.json"), regErrors)
 	if err != nil {
 		panic(err)
 	}
