@@ -1,4 +1,4 @@
-module github.com/appscodelabs/render-gotpl
+module github.com/appscodelabs/bom-merger
 
 go 1.14
 

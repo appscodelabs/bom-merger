@@ -41,9 +41,9 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
-          bin/render-gotpl-linux-amd64
-          bin/render-gotpl-linux-arm
-          bin/render-gotpl-linux-arm64
-          bin/render-gotpl-darwin-amd64
+          bin/bom-merger-linux-amd64
+          bin/bom-merger-linux-arm
+          bin/bom-merger-linux-arm64
+          bin/bom-merger-darwin-amd64
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

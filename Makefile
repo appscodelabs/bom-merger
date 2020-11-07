@@ -17,7 +17,7 @@ SHELL=/bin/bash -o pipefail
 
 GO_PKG   := github.com/appscodelabs
 REPO     := $(notdir $(shell pwd))
-BIN      := render-gotpl
+BIN      := bom-merger
 COMPRESS ?= no
 
 # This version-strategy uses git tags to set the version string
