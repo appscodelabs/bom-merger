@@ -56,13 +56,18 @@ var regErrors = map[string]projectAndLicenses{}
 
 func cleanupLicense(reg map[string]projectAndLicenses) error {
 	for project, info := range reg {
-		lics := make([]license, 0, len(info.Licenses))
-		for _, lic := range info.Licenses {
-			if lic.Confidence > 0.5 {
-				lics = append(lics, lic)
+		if len(info.Licenses) > 1 {
+			var score float64 = 0
+			var idx int
+
+			for i, lic := range info.Licenses {
+				if lic.Confidence > score {
+					score = lic.Confidence
+					idx = i
+				}
 			}
+			info.Licenses = []license{info.Licenses[idx]}
 		}
-		info.Licenses = lics
 		reg[project] = info
 	}
 	return nil
