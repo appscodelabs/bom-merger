@@ -30,13 +30,15 @@ import (
 )
 
 var (
-	dirIn  string
-	dirOut string
+	dirIn        string
+	dirOut       string
+	overrideFile string
 )
 
 func init() {
 	flag.StringVar(&dirIn, "in", "", "Path to directory where BOM json files are stored")
 	flag.StringVar(&dirOut, "out", "", "Path to directory where output files are stored")
+	flag.StringVar(&overrideFile, "override-file", "", "Path to override file")
 }
 
 type projectAndLicenses struct {
@@ -53,6 +55,7 @@ type license struct {
 
 var regBOM = map[string]projectAndLicenses{}
 var regErrors = map[string]projectAndLicenses{}
+var regOverride = map[string]projectAndLicenses{}
 
 func cleanupLicense(reg map[string]projectAndLicenses) error {
 	for project, info := range reg {
@@ -154,6 +157,21 @@ func loadBOM(filename string) error {
 func main() {
 	flag.Parse()
 
+	if overrideFile != "" {
+		data, err := ioutil.ReadFile(overrideFile)
+		if err != nil {
+			panic(err)
+		}
+		var overrides []projectAndLicenses
+		err = json.Unmarshal(data, &overrides)
+		if err != nil {
+			panic(err)
+		}
+		for _, project := range overrides {
+			regOverride[project.Project] = project
+		}
+	}
+
 	files, err := ioutil.ReadDir(dirIn)
 	if err != nil {
 		panic(err)
@@ -179,6 +197,10 @@ func main() {
 	err = discoverVCS(regErrors)
 	if err != nil {
 		panic(err)
+	}
+	for project, info := range regOverride {
+		regBOM[project] = info
+		delete(regErrors, project)
 	}
 
 	err = writeBOM(filepath.Join(dirOut, "bom.json"), regBOM)
