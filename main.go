@@ -24,21 +24,24 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	flag "github.com/spf13/pflag"
 	"gomodules.xyz/mod"
 )
 
 var (
-	dirIn        string
-	dirOut       string
-	overrideFile string
+	dirIn         string
+	dirOut        string
+	overrideFile  string
+	filterModules []string
 )
 
 func init() {
 	flag.StringVar(&dirIn, "in", "", "Path to directory where BOM json files are stored")
 	flag.StringVar(&dirOut, "out", "", "Path to directory where output files are stored")
 	flag.StringVar(&overrideFile, "override-file", "", "Path to override file")
+	flag.StringSliceVar(&filterModules, "filter-modules", nil, "Filter go modules with prefix")
 }
 
 type projectAndLicenses struct {
@@ -82,7 +85,12 @@ func discoverVCS(reg map[string]projectAndLicenses) error {
 		if err != nil {
 			return err
 		}
-		info.VCS = vcs
+		if vcs != "" {
+			info.VCS = vcs
+		} else if strings.HasPrefix(project, "github.com/") {
+			// for github projects keep first 3 parts
+			info.VCS = strings.Join(strings.Split(project, "/")[:3], "/")
+		}
 		reg[project] = info
 	}
 	return nil
@@ -190,6 +198,20 @@ func main() {
 		panic(err)
 	}
 
+	for _, module := range filterModules {
+		for project := range regBOM {
+			if strings.HasPrefix(project, module) {
+				delete(regBOM, project)
+			}
+		}
+	}
+
+	for project := range regBOM {
+		if override, ok := regOverride[project]; ok {
+			regBOM[project] = override
+		}
+	}
+
 	err = discoverVCS(regBOM)
 	if err != nil {
 		panic(err)
@@ -197,10 +219,6 @@ func main() {
 	err = discoverVCS(regErrors)
 	if err != nil {
 		panic(err)
-	}
-	for project, info := range regOverride {
-		regBOM[project] = info
-		delete(regErrors, project)
 	}
 
 	err = writeBOM(filepath.Join(dirOut, "bom.json"), regBOM)
