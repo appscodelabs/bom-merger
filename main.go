@@ -60,7 +60,7 @@ var regBOM = map[string]projectAndLicenses{}
 var regErrors = map[string]projectAndLicenses{}
 var regOverride = map[string]projectAndLicenses{}
 
-func cleanupLicense(reg map[string]projectAndLicenses) error {
+func cleanupLicense(reg map[string]projectAndLicenses) {
 	for project, info := range reg {
 		if len(info.Licenses) > 1 {
 			var score float64 = 0
@@ -76,7 +76,6 @@ func cleanupLicense(reg map[string]projectAndLicenses) error {
 		}
 		reg[project] = info
 	}
-	return nil
 }
 
 func discoverVCS(reg map[string]projectAndLicenses) error {
@@ -193,10 +192,7 @@ func main() {
 		}
 	}
 
-	err = cleanupLicense(regBOM)
-	if err != nil {
-		panic(err)
-	}
+	cleanupLicense(regBOM)
 
 	for _, module := range filterModules {
 		for project := range regBOM {
