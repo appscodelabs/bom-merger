@@ -149,11 +149,17 @@ func loadBOM(filename string) error {
 		}
 		if gooddoc {
 			for _, project := range info {
+				if project.Project == "" {
+					continue
+				}
 				regBOM[project.Project] = project
 			}
 			gooddoc = false
 		} else {
 			for _, project := range info {
+				if project.Project == "" {
+					continue
+				}
 				regErrors[project.Project] = project
 			}
 		}
