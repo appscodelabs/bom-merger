@@ -56,9 +56,11 @@ type license struct {
 	Confidence float64 `json:"confidence,omitempty"`
 }
 
-var regBOM = map[string]projectAndLicenses{}
-var regErrors = map[string]projectAndLicenses{}
-var regOverride = map[string]projectAndLicenses{}
+var (
+	regBOM      = map[string]projectAndLicenses{}
+	regErrors   = map[string]projectAndLicenses{}
+	regOverride = map[string]projectAndLicenses{}
+)
 
 func cleanupLicense(reg map[string]projectAndLicenses) {
 	for project, info := range reg {
@@ -104,7 +106,7 @@ func writeBOM(filename string, reg map[string]projectAndLicenses) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, data, 0644)
+	return ioutil.WriteFile(filename, data, 0o644)
 }
 
 func Keys(m map[string]projectAndLicenses) []string {
