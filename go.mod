@@ -9,5 +9,5 @@ require (
 
 require (
 	github.com/keighl/metabolize v0.0.0-20150915210303-97ab655d4034 // indirect
-	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102 // indirect
+	golang.org/x/net v0.7.0 // indirect
 )
