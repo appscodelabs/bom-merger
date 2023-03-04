@@ -106,7 +106,7 @@ func writeBOM(filename string, reg map[string]projectAndLicenses) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, data, 0o644)
+	return os.WriteFile(filename, data, 0o644)
 }
 
 func Keys(m map[string]projectAndLicenses) []string {
@@ -173,7 +173,7 @@ func main() {
 	flag.Parse()
 
 	if overrideFile != "" {
-		data, err := ioutil.ReadFile(overrideFile)
+		data, err := os.ReadFile(overrideFile)
 		if err != nil {
 			panic(err)
 		}
